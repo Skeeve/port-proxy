@@ -24,10 +24,15 @@ my $detach=0; # detach (unix only)
 
 #-- options --
 my %opts;
-getopt('d:c:D',\%opts);
+getopts('dc:Dp:',\%opts);
 if (exists $opts{'d'}) { $debug=1; }
 if (exists $opts{'c'}) { $configFile=$opts{'c'}; }
 if (exists $opts{'D'}) { $detach=1; }
+# -p filename.pid will put
+# kill \
+# PID
+# rm filename.pid
+# into the file. Usefull for killing the daemon and removing the pidfile
 
 #---- Global Vars ---
 my @allow_proxy_to=();
@@ -172,20 +177,30 @@ sub ReadConfig()
     @allow_proxy_to=();
     open(F,"<$configFile") || die "can't open file $configFile\n";
     while(<F>) {
-	$line=$_;
-	$line=~s/#.*$//g; # remove comments
-	if ($debug) { print "Conf>$line"; }
-	if ( $line=~/^\s*(.+?)=(.*?)\s*$/) {
-	    $param=$1; $val=$2;
-	    if ($param eq 'forward') {
-		@aval=split(/ *, */,$val);
-		CreateListenSock($aval[0],$aval[1],$aval[2],$aval[3]);
-	    } elsif($param eq 'allow_proxy_to') {
-		push(@allow_proxy_to,$val)
-	    }
-	}
+		$line= $_;
+		$line=~ s/#.*$//g; # remove comments
+		$line=~ s/\$(\w+|\{\w+\})/envvar($1)/ge;
+		if ($debug) { print "Conf>$line"; }
+		if ( $line=~/^\s*(.+?)=(.*?)\s*$/) {
+			$param=$1; $val=$2;
+			if ($param eq 'forward') {
+				@aval=split(/ *, */,$val);
+				CreateListenSock($aval[0],$aval[1],$aval[2],$aval[3]);
+			} elsif($param eq 'allow_proxy_to') {
+				push(@allow_proxy_to,$val)
+			}
+		}
     }
     close(F);
+}
+
+sub envvar {
+	my($varname)= @_;
+	for ($varname) {
+		s/^\{//;
+		s/\}$//
+	}
+	return defined($ENV{$varname}) ? $ENV{$varname} : $_[0];
 }
 
 #---
@@ -374,8 +389,15 @@ sub daemonize {
 	open STDIN, '/dev/null' or die "Can't read /dev/null: $!";
 	open STDOUT, '>/dev/null' or die "Can't write to /dev/null: $!";
 	defined(my $pid = fork) or die "Can't fork: $!";
-	exit if $pid;
-        setsid                  or die "Can't start a new session: $!";
-        open STDERR, '>&STDOUT' or die "Can't dup stdout: $!";
+	if ($pid) {
+		if ($opts{'p'}) {
+			open my $pidfile, '>', $opts{'p'} or exit;
+			print $pidfile "kill \\\n$pid\nrm ".$opts{'p'}."\n";
+			close $pidfile;
+		}
+		exit;
+	}
+	setsid                  or die "Can't start a new session: $!";
+	open STDERR, '>&STDOUT' or die "Can't dup stdout: $!";
 }
 
