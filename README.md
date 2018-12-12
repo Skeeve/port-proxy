@@ -30,7 +30,11 @@ Configuration
 =============
 
 
-All the configuration is done in the file port-proxy.conf, which is readed from the current directory when starting port-proxy
+All the configuration is done in the file port-proxy.conf, which is readed from the current directory when starting port-proxy.
+
+It is possible to use environment variables in the configuration file. Any $WORD or ${WORD} will be replaced by the value of the environment variable WORD, provided that the variable exists.
+
+**NOTE**: There is currently no way to use the character "$" when it is followed by a word character or a "{".
 
 There are the following parameters which can apear multiple times:
 
@@ -117,6 +121,8 @@ perl port-proxy [-d] [-D] [-c conffile]
 -d	 Enable debug output
 -D	 Become a background process (detach don't work on windows)
 -c conffile	 Specify an config file
+-p PIDFILE  Create a file containing th PID plus commands to
+            to send a kill to the process and remove the pidfile
 ```
 
 **Example:**
